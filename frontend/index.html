@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ponto Eletrônico — Login</title>
+
+    <style>
+      :root {
+        --bg-1: #e83f18;
+        --bg-2: rgba(227, 112, 75, 0.87);
+        --bg-3: #7a4775;
+        --card: rgba(255, 255, 255, 0.92);
+        --text: #1f1f23;
+        --muted: #5a5a6a;
+        --primary: #6b46c1;
+        --danger: #e53e3e;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: 'Lexend', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: linear-gradient(116.82deg, var(--bg-1) 0%, var(--bg-2) 59.27%, var(--bg-3) 97.92%);
+        color: var(--text);
+        display: grid;
+        place-items: center;
+      }
+
+      a {
+        color: var(--primary);
+        text-decoration: none;
+      }
+
+      .card {
+        width: min(520px, calc(100vw - 32px));
+        background: var(--card);
+        border-radius: 16px;
+        padding: 28px 24px;
+        box-shadow: 0 30px 60px rgba(12, 12, 47, 0.12);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      .subtitle {
+        margin: 8px 0 24px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      label {
+        display: block;
+        margin-top: 16px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        margin-top: 6px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 10px;
+        font-size: 14px;
+      }
+
+      button {
+        width: 100%;
+        padding: 12px 14px;
+        border: none;
+        border-radius: 10px;
+        margin-top: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: linear-gradient(90deg, var(--primary), #9f7aea);
+        color: white;
+      }
+
+      button.secondary {
+        background: white;
+        color: var(--text);
+        border: 1px solid rgba(0, 0, 0, 0.12);
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .error {
+        margin-top: 12px;
+        font-size: 13px;
+        color: var(--danger);
+      }
+
+      .entries {
+        margin-top: 20px;
+      }
+
+      .entry {
+        padding: 10px 14px;
+        margin-bottom: 10px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.04);
+        font-size: 13px;
+      }
+
+      footer {
+        margin-top: 20px;
+        text-align: center;
+        font-size: 12px;
+        color: rgba(0, 0, 0, 0.55);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="card" role="main">
+      <h1>Gestão de Ponto Eletrônico - Login</h1>
+      <p class="subtitle">Introduce o código e o PIN para acessar o registro de ponto.</p>
+
+      <section id="login">
+        <label for="codigoEmpregador">Código do Empregador</label>
+        <input id="codigoEmpregador" type="text" maxlength="5" autocomplete="off" value="" />
+
+        <label for="pin">PIN</label>
+        <input id="pin" type="password" maxlength="5" value="" />
+
+        <button id="btnLogin" class="primary">Acessar</button>
+        <p id="loginError" class="error hidden"></p>
+
+        <p class="subtitle" style="margin-top: 18px;">Não lembra seu PIN? <a href="#">Recuperar PIN</a></p>
+      </section>
+
+      <section id="dashboard" class="hidden">
+        <h1>Dashboard</h1>
+        <p class="subtitle">Use os botões abaixo para registrar seu ponto.</p>
+
+        <button id="btnEntrada" class="primary">Bater Entrada</button>
+        <button id="btnSaida" class="secondary">Bater Saída</button>
+        <button id="btnLogout" class="secondary" style="margin-top: 8px">Sair</button>
+
+        <div class="entries" id="entries"></div>
+      </section>
+
+      <footer>
+        © <span id="year"></span> Projeto de Gestão de Ponto Eletrônico. Desenvolvido por <a href="https://github.com/IsaqueBeltrao/ponto-app" target="_blank">Isaque Beltrao</a>.
+      </footer>
+    </div>
+
+    <script>
+      const apiUrl = '/api';
+      let token = null;
+
+      const loginSection = document.getElementById('login');
+      const dashboardSection = document.getElementById('dashboard');
+      const codigoEmpregadorInput = document.getElementById('codigoEmpregador');
+      const pinInput = document.getElementById('pin');
+      const loginError = document.getElementById('loginError');
+      const entriesContainer = document.getElementById('entries');
+      const yearSpan = document.getElementById('year');
+
+      yearSpan.textContent = new Date().getFullYear();
+
+      const setToken = (newToken) => {
+        token = newToken;
+        if (token) {
+          loginSection.classList.add('hidden');
+          dashboardSection.classList.remove('hidden');
+          loadEntries();
+        } else {
+          loginSection.classList.remove('hidden');
+          dashboardSection.classList.add('hidden');
+        }
+      };
+
+      const authHeaders = () => ({
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      });
+
+      const handleError = async (res) => {
+        const body = await res.json().catch(() => ({}));
+        return body.error || 'Erro inesperado';
+      };
+
+      const login = async () => {
+        loginError.classList.add('hidden');
+        const response = await fetch(`${apiUrl}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: codigoEmpregadorInput.value,
+            password: pinInput.value,
+          }),
+        });
+
+        if (!response.ok) {
+          loginError.textContent = await handleError(response);
+          loginError.classList.remove('hidden');
+          return;
+        }
+
+        const data = await response.json();
+        setToken(data.token);
+      };
+
+      const loadEntries = async () => {
+        const response = await fetch(`${apiUrl}/clock`, {
+          headers: authHeaders(),
+        });
+
+        if (!response.ok) {
+          entriesContainer.textContent = 'Erro ao carregar registros';
+          return;
+        }
+
+        const data = await response.json();
+        entriesContainer.innerHTML = '';
+        (data.entries || []).forEach((entry) => {
+          const el = document.createElement('div');
+          el.className = 'entry';
+          el.textContent = `${new Date(entry.timestamp).toLocaleString()} · ${entry.action}`;
+          entriesContainer.appendChild(el);
+        });
+      };
+
+      const clock = async (action) => {
+        const response = await fetch(`${apiUrl}/clock`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ action }),
+        });
+
+        if (!response.ok) {
+          const error = await handleError(response);
+          alert(error);
+          return;
+        }
+
+        await loadEntries();
+      };
+
+      document.getElementById('btnLogin').addEventListener('click', login);
+      document.getElementById('btnEntrada').addEventListener('click', () => clock('in'));
+      document.getElementById('btnSaida').addEventListener('click', () => clock('out'));
+      document.getElementById('btnLogout').addEventListener('click', () => setToken(null));
+
+      setToken(null);
+    </script>
+  </body>
+</html>
